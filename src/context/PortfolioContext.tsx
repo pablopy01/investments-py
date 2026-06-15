@@ -187,10 +187,10 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (inv.type === 'plazo_fijo') {
       if (!maturity) return;
 
-      // Pays monthly. Loop month by month from operation to maturity
-      let tempDate = new Date(issuance);
-      // Advance to the first month payment
-      tempDate.setMonth(tempDate.getMonth() + 1);
+      // Pays monthly on the 1st of each month
+      // Start from the 1st of the next month after issuance
+      const issueDate = new Date(issuance);
+      let tempDate = new Date(issueDate.getFullYear(), issueDate.getMonth() + 1, 1);
 
       while (tempDate <= maturity) {
         if (tempDate >= startProjDate && tempDate <= endProjDate) {
@@ -224,7 +224,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             });
           }
         }
-        tempDate.setMonth(tempDate.getMonth() + 1);
+        // Always advance to the 1st of the next month
+        tempDate = new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1);
       }
     }
 
