@@ -26,6 +26,80 @@ export const usePortfolio = () => {
   return context;
 };
 
+// Paraguay public holidays (fixed + Easter-based)
+const PARAGUAY_HOLIDAYS_FIXED = [
+  '01-01', // Año Nuevo
+  '05-01', // Día del Trabajador
+  '05-14', // Día de la Independencia Nacional
+  '05-15', // Día de la Independencia Nacional
+  '06-12', // Paz del Chaco
+  '08-15', // Fundación de Asunción
+  '09-29', // Batalla de Boquerón
+  '12-08', // Virgen de Caacupé
+  '12-25', // Navidad
+];
+
+// Calculate Easter Sunday for a given year (Anonymous Gregorian algorithm)
+function getEasterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function isParaguayHoliday(date: Date): boolean {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const mmdd = `${month}-${day}`;
+  
+  // Check fixed holidays
+  if (PARAGUAY_HOLIDAYS_FIXED.includes(mmdd)) return true;
+  
+  // Check Easter-based holidays (Jueves Santo, Viernes Santo)
+  const year = date.getFullYear();
+  const easter = getEasterSunday(year);
+  const holyThursday = new Date(easter);
+  holyThursday.setDate(holyThursday.getDate() - 3);
+  const goodFriday = new Date(easter);
+  goodFriday.setDate(goodFriday.getDate() - 2);
+  
+  if (date.getTime() === holyThursday.getTime()) return true;
+  if (date.getTime() === goodFriday.getTime()) return true;
+  
+  return false;
+}
+
+function isBusinessDay(date: Date): boolean {
+  const dayOfWeek = date.getDay();
+  // 0 = Sunday, 6 = Saturday
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+  return !isParaguayHoliday(date);
+}
+
+function getNextBusinessDay(date: Date): Date {
+  const result = new Date(date);
+  while (!isBusinessDay(result)) {
+    result.setDate(result.getDate() + 1);
+  }
+  return result;
+}
+
+function getFirstBusinessDayOfMonth(year: number, month: number): Date {
+  const firstDay = new Date(year, month, 1);
+  return getNextBusinessDay(firstDay);
+}
+
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [investments, setInvestments] = useState<Investment[]>(() => {
     const saved = localStorage.getItem('asuncion_portfolio');
@@ -187,22 +261,21 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (inv.type === 'plazo_fijo') {
       if (!maturity) return;
 
-      // Pays monthly on the 1st of each month
-      // Start from the 1st of the next month after issuance
+      // Pays monthly on the first business day of each month
+      // according to the Paraguayan calendar (skips weekends and holidays)
       const issueDate = new Date(issuance);
-      let tempDate = new Date(issueDate.getFullYear(), issueDate.getMonth() + 1, 1);
+      let payDate = getFirstBusinessDayOfMonth(issueDate.getFullYear(), issueDate.getMonth() + 1);
 
-      while (tempDate <= maturity) {
-        if (tempDate >= startProjDate && tempDate <= endProjDate) {
-          const dateString = tempDate.toISOString().split('T')[0];
-          const isMaturity = tempDate.getTime() === maturity.getTime();
+      while (payDate <= maturity) {
+        if (payDate >= startProjDate && payDate <= endProjDate) {
+          const dateString = payDate.toISOString().split('T')[0];
           
           // Interest return
           const monthlyReturn = inv.fixedMonthlyReturn || (inv.capital * (inv.interestRate / 100) / 12);
           
           cashFlow.push({
             date: dateString,
-            monthName: tempDate.toLocaleString('es-PY', { month: 'short', year: 'numeric' }),
+            monthName: payDate.toLocaleString('es-PY', { month: 'short', year: 'numeric' }),
             investmentId: inv.id,
             issuer: inv.issuer,
             type: 'plazo_fijo',
@@ -211,10 +284,13 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             isPrincipal: false
           });
 
-          if (isMaturity) {
+          // Check if this is the maturity month (compare year and month only)
+          const payYearMonth = `${payDate.getFullYear()}-${payDate.getMonth()}`;
+          const maturityYearMonth = `${maturity.getFullYear()}-${maturity.getMonth()}`;
+          if (payYearMonth === maturityYearMonth) {
             cashFlow.push({
               date: dateString,
-              monthName: tempDate.toLocaleString('es-PY', { month: 'short', year: 'numeric' }),
+              monthName: payDate.toLocaleString('es-PY', { month: 'short', year: 'numeric' }),
               investmentId: inv.id,
               issuer: inv.issuer,
               type: 'plazo_fijo',
@@ -224,8 +300,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             });
           }
         }
-        // Always advance to the 1st of the next month
-        tempDate = new Date(tempDate.getFullYear(), tempDate.getMonth() + 1, 1);
+        // Advance to the first business day of the next month
+        payDate = getFirstBusinessDayOfMonth(payDate.getFullYear(), payDate.getMonth() + 1);
       }
     }
 
