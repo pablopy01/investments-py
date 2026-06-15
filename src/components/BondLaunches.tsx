@@ -62,14 +62,26 @@ export const BondLaunches: React.FC = () => {
   const [simulation, setSimulation] = useState<SimulationState | null>(null);
   const [capitalInput, setCapitalInput] = useState<string>('');
 
-  // ── Electron IPC loading logic (unchanged) ────────────────────────────
-  const loadLaunches = async () => {
+  // ── Electron IPC loading logic ──────────────────────────────────────────
+  const loadLaunches = async (forceSync = false) => {
     if (window.electronAPI) {
       try {
+        // Always sync on app start to get fresh data
+        if (forceSync) {
+          console.log('[BondLaunches] Syncing fresh launches...');
+          const fresh = await window.electronAPI.syncRealLaunches();
+          if (fresh && fresh.length > 0) {
+            setLaunches(fresh);
+            return;
+          }
+        }
+        
+        // Try to load from cache first
         const cached = await window.electronAPI.getRealLaunches();
         if (cached && cached.length > 0) {
           setLaunches(cached);
         } else {
+          // Fallback to sync if no cache
           await handleSync();
         }
       } catch (err) {
@@ -96,11 +108,12 @@ export const BondLaunches: React.FC = () => {
   };
 
   useEffect(() => {
-    loadLaunches();
+    // Always sync launches when component mounts (app start)
+    loadLaunches(true);
     
     // Listen for badge updates (so when news are updated, launches are reloaded too!)
     const handleBadgeUpdate = () => {
-      loadLaunches();
+      loadLaunches(false);
     };
     window.addEventListener('news-badge-update', handleBadgeUpdate);
     return () => {
