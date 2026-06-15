@@ -40,7 +40,7 @@ const PARAGUAY_HOLIDAYS_FIXED = [
 ];
 
 // Calculate Easter Sunday for a given year (Anonymous Gregorian algorithm)
-function getEasterSunday(year: number): Date {
+export function getEasterSunday(year: number): Date {
   const a = year % 19;
   const b = Math.floor(year / 100);
   const c = year % 100;
@@ -58,7 +58,7 @@ function getEasterSunday(year: number): Date {
   return new Date(year, month - 1, day);
 }
 
-function isParaguayHoliday(date: Date): boolean {
+export function isParaguayHoliday(date: Date): boolean {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const mmdd = `${month}-${day}`;
@@ -80,14 +80,14 @@ function isParaguayHoliday(date: Date): boolean {
   return false;
 }
 
-function isBusinessDay(date: Date): boolean {
+export function isBusinessDay(date: Date): boolean {
   const dayOfWeek = date.getDay();
   // 0 = Sunday, 6 = Saturday
   if (dayOfWeek === 0 || dayOfWeek === 6) return false;
   return !isParaguayHoliday(date);
 }
 
-function getNextBusinessDay(date: Date): Date {
+export function getNextBusinessDay(date: Date): Date {
   const result = new Date(date);
   while (!isBusinessDay(result)) {
     result.setDate(result.getDate() + 1);
@@ -95,7 +95,7 @@ function getNextBusinessDay(date: Date): Date {
   return result;
 }
 
-function getFirstBusinessDayOfMonth(year: number, month: number): Date {
+export function getFirstBusinessDayOfMonth(year: number, month: number): Date {
   const firstDay = new Date(year, month, 1);
   return getNextBusinessDay(firstDay);
 }
